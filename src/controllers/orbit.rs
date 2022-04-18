@@ -8,7 +8,7 @@ use bevy::{
         prelude::*,
     },
     math::prelude::*,
-    render::prelude::*,
+    render::{camera::Camera3d, prelude::*},
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -28,9 +28,7 @@ impl OrbitCameraPlugin {
 
 impl Plugin for OrbitCameraPlugin {
     fn build(&self, app: &mut App) {
-        let app = app
-            .add_system(control_system)
-            .add_event::<ControlEvent>();
+        let app = app.add_system(control_system).add_event::<ControlEvent>();
         if !self.override_input_system {
             app.add_system(default_input_map);
         }
@@ -46,10 +44,10 @@ pub struct OrbitCameraBundle<T: Bundle> {
     camera_bundle: T,
 }
 
-impl<M: Component> OrbitCameraBundle<PerspectiveCameraBundle<M>> {
+impl OrbitCameraBundle<PerspectiveCameraBundle<Camera3d>> {
     pub fn with_perspective(
         controller: OrbitCameraController,
-        mut perspective: PerspectiveCameraBundle<M>,
+        mut perspective: PerspectiveCameraBundle<Camera3d>,
         eye: Vec3,
         target: Vec3,
     ) -> Self {
@@ -67,10 +65,10 @@ impl<M: Component> OrbitCameraBundle<PerspectiveCameraBundle<M>> {
     }
 }
 
-impl<M: Component> OrbitCameraBundle<OrthographicCameraBundle<M>> {
+impl OrbitCameraBundle<OrthographicCameraBundle<Camera3d>> {
     pub fn with_orthographic(
         controller: OrbitCameraController,
-        mut orthographic: OrthographicCameraBundle<M>,
+        mut orthographic: OrthographicCameraBundle<Camera3d>,
         eye: Vec3,
         target: Vec3,
     ) -> Self {

@@ -5,7 +5,7 @@ use bevy::{
     ecs::{bundle::Bundle, prelude::*},
     input::{mouse::MouseMotion, prelude::*},
     math::prelude::*,
-    render::prelude::*,
+    render::{camera::Camera3d, prelude::*},
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -25,9 +25,7 @@ impl FpsCameraPlugin {
 
 impl Plugin for FpsCameraPlugin {
     fn build(&self, app: &mut App) {
-        let app = app
-            .add_system(control_system)
-            .add_event::<ControlEvent>();
+        let app = app.add_system(control_system).add_event::<ControlEvent>();
         if !self.override_input_system {
             app.add_system(default_input_map);
         }
@@ -35,18 +33,18 @@ impl Plugin for FpsCameraPlugin {
 }
 
 #[derive(Bundle)]
-pub struct FpsCameraBundle<M: Component> {
+pub struct FpsCameraBundle {
     controller: FpsCameraController,
     #[bundle]
     look_transform: LookTransformBundle,
     #[bundle]
-    perspective: PerspectiveCameraBundle<M>,
+    perspective: PerspectiveCameraBundle<Camera3d>,
 }
 
-impl<M: Component> FpsCameraBundle<M> {
+impl FpsCameraBundle {
     pub fn new(
         controller: FpsCameraController,
-        mut perspective: PerspectiveCameraBundle<M>,
+        mut perspective: PerspectiveCameraBundle<Camera3d>,
         eye: Vec3,
         target: Vec3,
     ) -> Self {
