@@ -13,16 +13,16 @@ approx = "0.4"
 serde = "1.0"
 
 [dependencies.bevy]
-version = "0.6.1"
+version = "0.7.0"
 features = ["render"]
 default-features = false
 
 [dev-dependencies.bevy]
-version = "0.6.1"
+version = "0.7.0"
 features = ["bevy_winit", "bevy_gltf"]
 default-features = false
 
 [target.'cfg(target_os = "linux")'.dev-dependencies.bevy]
-version = "0.6.1"
+version = "0.7.0"
 features = ["x11", "wayland"]
 default-features = false

@@ -36,18 +36,18 @@ impl Plugin for UnrealCameraPlugin {
 }
 
 #[derive(Bundle)]
-pub struct UnrealCameraBundle {
+pub struct UnrealCameraBundle<M: Component> {
     controller: UnrealCameraController,
     #[bundle]
     look_transform: LookTransformBundle,
     #[bundle]
-    perspective: PerspectiveCameraBundle,
+    perspective: PerspectiveCameraBundle<M>,
 }
 
-impl UnrealCameraBundle {
+impl<M: Component> UnrealCameraBundle<M> {
     pub fn new(
         controller: UnrealCameraController,
-        mut perspective: PerspectiveCameraBundle,
+        mut perspective: PerspectiveCameraBundle<M>,
         eye: Vec3,
         target: Vec3,
     ) -> Self {

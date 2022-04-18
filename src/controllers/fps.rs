@@ -35,18 +35,18 @@ impl Plugin for FpsCameraPlugin {
 }
 
 #[derive(Bundle)]
-pub struct FpsCameraBundle {
+pub struct FpsCameraBundle<M: Component> {
     controller: FpsCameraController,
     #[bundle]
     look_transform: LookTransformBundle,
     #[bundle]
-    perspective: PerspectiveCameraBundle,
+    perspective: PerspectiveCameraBundle<M>,
 }
 
-impl FpsCameraBundle {
+impl<M: Component> FpsCameraBundle<M> {
     pub fn new(
         controller: FpsCameraController,
-        mut perspective: PerspectiveCameraBundle,
+        mut perspective: PerspectiveCameraBundle<M>,
         eye: Vec3,
         target: Vec3,
     ) -> Self {
