@@ -9,7 +9,7 @@ use bevy::{
     },
     math::prelude::*,
     prelude::Camera3dBundle,
-    render::{camera::Projection},
+    render::camera::Projection,
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -205,10 +205,7 @@ pub fn control_system(
 
     let mut look_angles = LookAngles::from_vector(-transform.look_direction().unwrap());
     let mut radius_scalar = 1.0;
-    let is_orthographic = match projection {
-        Projection::Orthographic(_) => true,
-        _ => false,
-    };
+    let is_orthographic = matches!(projection, Projection::Orthographic(_));
 
     for event in events.iter() {
         match event {
