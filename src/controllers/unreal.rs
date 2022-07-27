@@ -8,7 +8,7 @@ use bevy::{
         prelude::*,
     },
     math::prelude::*,
-    prelude::{Camera3dBundle},
+    prelude::Camera3dBundle,
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};

@@ -9,7 +9,7 @@ use bevy::{
     },
     math::prelude::*,
     prelude::Camera3dBundle,
-    render::prelude::*,
+    render::{camera::Projection},
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -59,10 +59,16 @@ impl OrbitCameraBundle {
         // Make sure the transform is consistent with the controller to start.
         camera.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
 
+        let scale = if let Projection::Orthographic(ref o) = camera.projection {
+            o.scale
+        } else {
+            0.0
+        };
+
         Self {
             controller,
             look_transform: LookTransformBundle {
-                transform: LookTransform::new(eye, target),
+                transform: LookTransform::new_with_scale(eye, target, scale),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
             camera_bundle: camera,
@@ -184,22 +190,25 @@ pub fn control_system(
         &OrbitCameraController,
         &mut LookTransform,
         &Transform,
-        Option<&mut OrthographicProjection>,
+        &Projection,
     )>,
 ) {
     // Can only control one camera at a time.
-    let (mut transform, scene_transform, orth) =
-        if let Some((_, transform, scene_transform, orth)) =
+    let (mut transform, scene_transform, projection) =
+        if let Some((_, transform, scene_transform, projection)) =
             cameras.iter_mut().find(|c| c.0.enabled)
         {
-            (transform, scene_transform, orth)
+            (transform, scene_transform, projection)
         } else {
             return;
         };
 
     let mut look_angles = LookAngles::from_vector(-transform.look_direction().unwrap());
     let mut radius_scalar = 1.0;
-    let is_orthographic = orth.is_some();
+    let is_orthographic = match projection {
+        Projection::Orthographic(_) => true,
+        _ => false,
+    };
 
     for event in events.iter() {
         match event {

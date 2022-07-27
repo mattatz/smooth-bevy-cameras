@@ -2,7 +2,7 @@ use bevy::{
     app::prelude::*,
     ecs::{bundle::Bundle, prelude::*},
     math::prelude::*,
-    prelude::OrthographicProjection,
+    render::camera::Projection,
     transform::components::Transform,
 };
 
@@ -122,16 +122,16 @@ fn look_transform_system(
     mut cameras: Query<(
         &LookTransform,
         &mut Transform,
-        Option<&mut OrthographicProjection>,
+        &mut Projection,
         Option<&mut Smoother>,
     )>,
 ) {
-    for (look_transform, mut scene_transform, orth, smoother) in cameras.iter_mut() {
+    for (look_transform, mut scene_transform, mut projection, smoother) in cameras.iter_mut() {
         match smoother {
             Some(mut s) if s.enabled => {
                 let tr = s.smooth_transform(look_transform);
-                if let Some(mut projection) = orth {
-                    projection.scale = tr.scale;
+                if let Projection::Orthographic(orth) = projection.as_mut() {
+                    orth.scale = tr.scale;
                 }
                 *scene_transform = tr.into()
             }
