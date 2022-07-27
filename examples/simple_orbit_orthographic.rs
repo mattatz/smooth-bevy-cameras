@@ -1,6 +1,6 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::ScalingMode};
 use smooth_bevy_cameras::{
-    controllers::unreal::{UnrealCameraBundle, UnrealCameraController, UnrealCameraPlugin},
+    controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
     LookTransformPlugin,
 };
 
@@ -9,7 +9,7 @@ fn main() {
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
-        .add_plugin(UnrealCameraPlugin::default())
+        .add_plugin(OrbitCameraPlugin::default())
         .add_startup_system(setup)
         .run();
 }
@@ -41,9 +41,18 @@ fn setup(
         ..Default::default()
     });
 
-    commands.spawn_bundle(UnrealCameraBundle::new(
-        UnrealCameraController::default(),
-        Camera3dBundle::default(),
+    let orth = Camera3dBundle {
+        projection: OrthographicProjection {
+            scale: 5.0,
+            scaling_mode: ScalingMode::FixedVertical(2.0),
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
+    commands.spawn_bundle(OrbitCameraBundle::new(
+        OrbitCameraController::default(),
+        orth,
         Vec3::new(-2.0, 5.0, 5.0),
         Vec3::new(0., 0., 0.),
     ));

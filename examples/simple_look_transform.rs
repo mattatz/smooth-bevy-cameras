@@ -42,10 +42,11 @@ fn setup(
             transform: LookTransform {
                 eye: Vec3::new(-2.0, 2.5, 5.0),
                 target: Vec3::new(0.0, 0.5, 0.0),
+                scale: 1.0,
             },
             smoother: Smoother::new(0.9),
         })
-        .insert_bundle(PerspectiveCameraBundle {
+        .insert_bundle(Camera3dBundle {
             transform: Transform::from_xyz(-2.0, 2.5, 5.0)
                 .looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y),
             ..default()

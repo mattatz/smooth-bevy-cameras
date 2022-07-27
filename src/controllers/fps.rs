@@ -5,7 +5,7 @@ use bevy::{
     ecs::{bundle::Bundle, prelude::*},
     input::{mouse::MouseMotion, prelude::*},
     math::prelude::*,
-    render::{camera::Camera3d, prelude::*},
+    prelude::Camera3dBundle,
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -42,18 +42,18 @@ pub struct FpsCameraBundle {
     #[bundle]
     look_transform: LookTransformBundle,
     #[bundle]
-    perspective: PerspectiveCameraBundle<Camera3d>,
+    camera: Camera3dBundle,
 }
 
 impl FpsCameraBundle {
     pub fn new(
         controller: FpsCameraController,
-        mut perspective: PerspectiveCameraBundle<Camera3d>,
+        mut camera: Camera3dBundle,
         eye: Vec3,
         target: Vec3,
     ) -> Self {
         // Make sure the transform is consistent with the controller to start.
-        perspective.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
+        camera.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
 
         Self {
             controller,
@@ -61,7 +61,7 @@ impl FpsCameraBundle {
                 transform: LookTransform::new(eye, target),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
-            perspective,
+            camera,
         }
     }
 }
@@ -100,9 +100,7 @@ pub fn default_input_map(
     controllers: Query<&FpsCameraController>,
 ) {
     // Can only control one camera at a time.
-    let controller = if let Some(controller) = controllers.iter().find(|c| {
-        c.enabled
-    }) {
+    let controller = if let Some(controller) = controllers.iter().find(|c| c.enabled) {
         controller
     } else {
         return;
@@ -144,38 +142,35 @@ pub fn control_system(
     mut cameras: Query<(&FpsCameraController, &mut LookTransform)>,
 ) {
     // Can only control one camera at a time.
-    let mut transform =
-        if let Some((_, transform)) = cameras.iter_mut().find(|c| {
-            c.0.enabled
-        }) {
-            transform
-        } else {
-            return;
-        };
+    let mut transform = if let Some((_, transform)) = cameras.iter_mut().find(|c| c.0.enabled) {
+        transform
+    } else {
+        return;
+    };
 
-        let look_vector = transform.look_direction().unwrap();
-        let mut look_angles = LookAngles::from_vector(look_vector);
+    let look_vector = transform.look_direction().unwrap();
+    let mut look_angles = LookAngles::from_vector(look_vector);
 
-        let yaw_rot = Quat::from_axis_angle(Vec3::Y, look_angles.get_yaw());
-        let rot_x = yaw_rot * Vec3::X;
-        let rot_y = yaw_rot * Vec3::Y;
-        let rot_z = yaw_rot * Vec3::Z;
+    let yaw_rot = Quat::from_axis_angle(Vec3::Y, look_angles.get_yaw());
+    let rot_x = yaw_rot * Vec3::X;
+    let rot_y = yaw_rot * Vec3::Y;
+    let rot_z = yaw_rot * Vec3::Z;
 
-        for event in events.iter() {
-            match event {
-                ControlEvent::Rotate(delta) => {
-                    // Rotates with pitch and yaw.
-                    look_angles.add_yaw(-delta.x);
-                    look_angles.add_pitch(-delta.y);
-                }
-                ControlEvent::TranslateEye(delta) => {
-                    // Translates up/down (Y) left/right (X) and forward/back (Z).
-                    transform.eye += delta.x * rot_x + delta.y * rot_y + delta.z * rot_z;
-                }
+    for event in events.iter() {
+        match event {
+            ControlEvent::Rotate(delta) => {
+                // Rotates with pitch and yaw.
+                look_angles.add_yaw(-delta.x);
+                look_angles.add_pitch(-delta.y);
+            }
+            ControlEvent::TranslateEye(delta) => {
+                // Translates up/down (Y) left/right (X) and forward/back (Z).
+                transform.eye += delta.x * rot_x + delta.y * rot_y + delta.z * rot_z;
             }
         }
+    }
 
-        look_angles.assert_not_looking_up();
+    look_angles.assert_not_looking_up();
 
-        transform.target = transform.eye + transform.radius() * look_angles.unit_vector();
+    transform.target = transform.eye + transform.radius() * look_angles.unit_vector();
 }
