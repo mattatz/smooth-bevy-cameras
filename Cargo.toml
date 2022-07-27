@@ -11,27 +11,28 @@ license = "MIT"
 [dependencies]
 approx = "0.4"
 serde = "1.0"
+unicode-xid = "0.2.3" # for bevy-v0.8.0-dev dependencies
 
 [dependencies.bevy]
-version = "0.7"
-# git = "https://github.com/bevyengine/bevy"
-# rev = "f3de12bc"
+# version = "0.7"
+git = "https://github.com/bevyengine/bevy"
+rev = "6a1ba9c" # v0.8.0-dev
 # branch = "main"
 features = ["bevy_render"]
 default-features = false
 
 [dev-dependencies.bevy]
-version = "0.7"
-# git = "https://github.com/bevyengine/bevy"
-# rev = "f3de12bc"
+# version = "0.7"
+git = "https://github.com/bevyengine/bevy"
+rev = "6a1ba9c" # v0.8.0-dev
 # branch = "main"
-features = ["bevy_core_pipeline", "bevy_pbr", "bevy_winit", "bevy_gltf"]
+features = ["bevy_core_pipeline", "bevy_pbr", "bevy_winit", "bevy_gltf", "bevy_asset"]
 default-features = false
 
 [target.'cfg(target_os = "linux")'.dev-dependencies.bevy]
-version = "0.7"
-# git = "https://github.com/bevyengine/bevy"
-# rev = "f3de12bc"
+# version = "0.7"
+git = "https://github.com/bevyengine/bevy"
+rev = "6a1ba9c" # v0.8.0-dev
 # branch = "main"
 features = ["x11", "wayland"]
 default-features = false

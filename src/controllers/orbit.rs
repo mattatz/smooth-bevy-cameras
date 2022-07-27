@@ -8,7 +8,8 @@ use bevy::{
         prelude::*,
     },
     math::prelude::*,
-    render::{camera::Camera3d, prelude::*},
+    prelude::Camera3dBundle,
+    render::prelude::*,
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -40,23 +41,23 @@ impl Plugin for OrbitCameraPlugin {
 }
 
 #[derive(Bundle)]
-pub struct OrbitCameraBundle<T: Bundle> {
+pub struct OrbitCameraBundle {
     controller: OrbitCameraController,
     #[bundle]
     look_transform: LookTransformBundle,
     #[bundle]
-    camera_bundle: T,
+    camera_bundle: Camera3dBundle,
 }
 
-impl OrbitCameraBundle<PerspectiveCameraBundle<Camera3d>> {
-    pub fn with_perspective(
+impl OrbitCameraBundle {
+    pub fn new(
         controller: OrbitCameraController,
-        mut perspective: PerspectiveCameraBundle<Camera3d>,
+        mut camera: Camera3dBundle,
         eye: Vec3,
         target: Vec3,
     ) -> Self {
         // Make sure the transform is consistent with the controller to start.
-        perspective.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
+        camera.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
 
         Self {
             controller,
@@ -64,11 +65,12 @@ impl OrbitCameraBundle<PerspectiveCameraBundle<Camera3d>> {
                 transform: LookTransform::new(eye, target),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
-            camera_bundle: perspective,
+            camera_bundle: camera,
         }
     }
 }
 
+/*
 impl OrbitCameraBundle<OrthographicCameraBundle<Camera3d>> {
     pub fn with_orthographic(
         controller: OrbitCameraController,
@@ -93,6 +95,7 @@ impl OrbitCameraBundle<OrthographicCameraBundle<Camera3d>> {
         }
     }
 }
+*/
 
 /// A 3rd person camera that orbits around the target.
 #[derive(Clone, Component, Copy, Debug, Deserialize, Serialize)]

@@ -43,7 +43,7 @@ fn setup(
 
     commands.spawn_bundle(UnrealCameraBundle::new(
         UnrealCameraController::default(),
-        PerspectiveCameraBundle::default(),
+        Camera3dBundle::default(),
         Vec3::new(-2.0, 5.0, 5.0),
         Vec3::new(0., 0., 0.),
     ));

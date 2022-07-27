@@ -8,7 +8,7 @@ use bevy::{
         prelude::*,
     },
     math::prelude::*,
-    render::{camera::Camera3d, prelude::*},
+    prelude::{Camera, Camera3d, Camera3dBundle},
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -44,18 +44,18 @@ pub struct UnrealCameraBundle {
     #[bundle]
     look_transform: LookTransformBundle,
     #[bundle]
-    perspective: PerspectiveCameraBundle<Camera3d>,
+    camera: Camera3dBundle,
 }
 
 impl UnrealCameraBundle {
     pub fn new(
         controller: UnrealCameraController,
-        mut perspective: PerspectiveCameraBundle<Camera3d>,
+        mut camera: Camera3dBundle,
         eye: Vec3,
         target: Vec3,
     ) -> Self {
         // Make sure the transform is consistent with the controller to start.
-        perspective.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
+        camera.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
 
         Self {
             controller,
@@ -63,7 +63,7 @@ impl UnrealCameraBundle {
                 transform: LookTransform::new(eye, target),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
-            perspective,
+            camera,
         }
     }
 }

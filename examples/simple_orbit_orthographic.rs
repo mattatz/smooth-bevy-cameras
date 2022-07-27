@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::camera::ScalingMode};
 use smooth_bevy_cameras::{
     controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
     LookTransformPlugin,
@@ -41,13 +41,19 @@ fn setup(
         ..Default::default()
     });
 
-    let mut orth = OrthographicCameraBundle::new_3d();
-    orth.orthographic_projection.scale = 5.0;
-    commands.spawn_bundle(OrbitCameraBundle::with_orthographic(
+    let mut orth = Camera3dBundle {
+        projection: OrthographicProjection {
+            scale: 5.0,
+            scaling_mode: ScalingMode::FixedVertical(2.0),
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
+    commands.spawn_bundle(OrbitCameraBundle::new(
         OrbitCameraController::default(),
         orth,
         Vec3::new(-2.0, 5.0, 5.0),
         Vec3::new(0., 0., 0.),
     ));
 }
-
