@@ -213,7 +213,7 @@ pub fn control_system(
                 let mut translation = delta.x * right_dir + delta.y * up_dir;
                 if is_orthographic {
                     let scale = transform.scale * 0.5;
-                    translation = translation * scale;
+                    translation *= scale;
                 }
                 transform.target += translation;
             }
@@ -226,7 +226,7 @@ pub fn control_system(
     look_angles.assert_not_looking_up();
 
     if is_orthographic {
-        transform.scale = transform.scale * radius_scalar;
+        transform.scale *= radius_scalar;
         transform.eye = transform.target + transform.radius() * look_angles.unit_vector();
     } else {
         let new_radius = (radius_scalar * transform.radius())

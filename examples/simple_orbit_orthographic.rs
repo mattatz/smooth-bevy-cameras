@@ -41,7 +41,7 @@ fn setup(
         ..Default::default()
     });
 
-    let mut orth = Camera3dBundle {
+    let orth = Camera3dBundle {
         projection: OrthographicProjection {
             scale: 5.0,
             scaling_mode: ScalingMode::FixedVertical(2.0),
