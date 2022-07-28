@@ -16,16 +16,16 @@ unicode-xid = "0.2.3" # for bevy-v0.8.0-dev dependencies
 [dependencies.bevy]
 # version = "0.7"
 git = "https://github.com/bevyengine/bevy"
-rev = "6a1ba9c" # v0.8.0-dev
-# branch = "main"
+# rev = "6a1ba9c" # v0.8.0-dev
+branch = "main"
 features = ["bevy_render"]
 default-features = false
 
 [dev-dependencies.bevy]
 # version = "0.7"
 git = "https://github.com/bevyengine/bevy"
-rev = "6a1ba9c" # v0.8.0-dev
-# branch = "main"
+# rev = "6a1ba9c" # v0.8.0-dev
+branch = "main"
 features = ["bevy_core_pipeline", "bevy_pbr", "bevy_winit", "bevy_gltf", "bevy_asset"]
 default-features = false
 
