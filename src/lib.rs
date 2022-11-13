@@ -29,11 +29,11 @@
 //!     let target = Vec3::default();
 //!
 //!     commands
-//!         .spawn_bundle(LookTransformBundle {
+//!         .spawn(LookTransformBundle {
 //!             transform: LookTransform::new(eye, target),
 //!             smoother: Smoother::new(0.9), // Value between 0.0 and 1.0, higher is smoother.
 //!         })
-//!         .insert_bundle(PerspectiveCameraBundle::default());
+//!         .insert(PerspectiveCameraBundle::default());
 //!
 //! }
 //!
