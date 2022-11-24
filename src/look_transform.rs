@@ -2,8 +2,7 @@ use bevy::{
     app::prelude::*,
     ecs::{bundle::Bundle, prelude::*},
     math::prelude::*,
-    render::camera::Projection,
-    transform::components::Transform,
+    transform::components::Transform, prelude::Projection,
 };
 
 pub struct LookTransformPlugin;
@@ -37,15 +36,7 @@ impl From<LookTransform> for Transform {
 
 impl LookTransform {
     pub fn new(eye: Vec3, target: Vec3) -> Self {
-        Self {
-            eye,
-            target,
-            scale: 0.0,
-        }
-    }
-
-    pub fn new_with_scale(eye: Vec3, target: Vec3, scale: f32) -> Self {
-        Self { eye, target, scale }
+        Self { eye, target, scale: 0.0, }
     }
 
     pub fn radius(&self) -> f32 {
@@ -119,19 +110,14 @@ impl Smoother {
 }
 
 fn look_transform_system(
-    mut cameras: Query<(
-        &LookTransform,
-        &mut Transform,
-        &mut Projection,
-        Option<&mut Smoother>,
-    )>,
+    mut cameras: Query<(&LookTransform, &mut Transform, &mut Projection, Option<&mut Smoother>)>,
 ) {
     for (look_transform, mut scene_transform, mut projection, smoother) in cameras.iter_mut() {
         match smoother {
             Some(mut s) if s.enabled => {
                 let tr = s.smooth_transform(look_transform);
                 if let Projection::Orthographic(orth) = projection.as_mut() {
-                    orth.scale = tr.scale;
+                    orth.scale =  tr.scale;
                 }
                 *scene_transform = tr.into()
             }

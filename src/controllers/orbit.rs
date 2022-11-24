@@ -8,9 +8,8 @@ use bevy::{
         prelude::*,
     },
     math::prelude::*,
-    prelude::Camera3dBundle,
-    render::camera::Projection,
-    transform::components::Transform,
+    time::Time,
+    transform::components::Transform, prelude::Projection,
 };
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +29,7 @@ impl OrbitCameraPlugin {
 impl Plugin for OrbitCameraPlugin {
     fn build(&self, app: &mut App) {
         let app = app
+            .add_startup_system_to_stage(StartupStage::PostStartup, setup_orthographic_transform)
             .add_system_to_stage(CoreStage::PreUpdate, on_controller_enabled_changed)
             .add_system(control_system)
             .add_event::<ControlEvent>();
@@ -45,63 +45,24 @@ pub struct OrbitCameraBundle {
     controller: OrbitCameraController,
     #[bundle]
     look_transform: LookTransformBundle,
-    #[bundle]
-    camera_bundle: Camera3dBundle,
+    transform: Transform,
 }
 
 impl OrbitCameraBundle {
-    pub fn new(
-        controller: OrbitCameraController,
-        mut camera: Camera3dBundle,
-        eye: Vec3,
-        target: Vec3,
-    ) -> Self {
+    pub fn new(controller: OrbitCameraController, eye: Vec3, target: Vec3) -> Self {
         // Make sure the transform is consistent with the controller to start.
-        camera.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
-
-        let scale = if let Projection::Orthographic(ref o) = camera.projection {
-            o.scale
-        } else {
-            0.0
-        };
+        let transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
 
         Self {
             controller,
             look_transform: LookTransformBundle {
-                transform: LookTransform::new_with_scale(eye, target, scale),
+                transform: LookTransform::new(eye, target),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
-            camera_bundle: camera,
+            transform,
         }
     }
 }
-
-/*
-impl OrbitCameraBundle<OrthographicCameraBundle<Camera3d>> {
-    pub fn with_orthographic(
-        controller: OrbitCameraController,
-        mut orthographic: OrthographicCameraBundle<Camera3d>,
-        eye: Vec3,
-        target: Vec3,
-    ) -> Self {
-        // Make sure the transform is consistent with the controller to start.
-        orthographic.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
-
-        Self {
-            controller,
-            look_transform: LookTransformBundle {
-                transform: LookTransform::new_with_scale(
-                    eye,
-                    target,
-                    orthographic.orthographic_projection.scale,
-                ),
-                smoother: Smoother::new(controller.smoothing_weight),
-            },
-            camera_bundle: orthographic,
-        }
-    }
-}
-*/
 
 /// A 3rd person camera that orbits around the target.
 #[derive(Clone, Component, Copy, Debug, Deserialize, Serialize)]
@@ -117,9 +78,9 @@ pub struct OrbitCameraController {
 impl Default for OrbitCameraController {
     fn default() -> Self {
         Self {
-            mouse_rotate_sensitivity: Vec2::splat(0.006),
-            mouse_translate_sensitivity: Vec2::splat(0.008),
-            mouse_wheel_zoom_sensitivity: 0.15,
+            mouse_rotate_sensitivity: Vec2::splat(0.08),
+            mouse_translate_sensitivity: Vec2::splat(0.1),
+            mouse_wheel_zoom_sensitivity: 0.2,
             smoothing_weight: 0.8,
             enabled: true,
             pixels_per_line: 53.0,
@@ -134,6 +95,23 @@ pub enum ControlEvent {
 }
 
 define_on_controller_enabled_changed!(OrbitCameraController);
+
+fn setup_orthographic_transform(
+    mut cameras: Query<(&OrbitCameraController, &mut LookTransform, &Projection)>,
+) {
+    let (mut transform, projection) =
+        if let Some((_, transform, projection)) = cameras.iter_mut().find(|c| c.0.enabled) {
+            (transform, projection)
+        } else {
+            return;
+        };
+    let scale = if let Projection::Orthographic(ref o) = projection {
+        o.scale
+    } else {
+        0.0
+    };
+    transform.scale = scale;
+}
 
 pub fn default_input_map(
     mut events: EventWriter<ControlEvent>,
@@ -185,20 +163,14 @@ pub fn default_input_map(
 }
 
 pub fn control_system(
+    time: Res<Time>,
     mut events: EventReader<ControlEvent>,
-    mut cameras: Query<(
-        &OrbitCameraController,
-        &mut LookTransform,
-        &Transform,
-        &Projection,
-    )>,
+    mut cameras: Query<(&OrbitCameraController, &mut LookTransform, &Transform, &Projection)>,
 ) {
     // Can only control one camera at a time.
     let (mut transform, scene_transform, projection) =
-        if let Some((_, transform, scene_transform, projection)) =
-            cameras.iter_mut().find(|c| c.0.enabled)
-        {
-            (transform, scene_transform, projection)
+        if let Some((_, transform, scene_transform, proj)) = cameras.iter_mut().find(|c| c.0.enabled) {
+            (transform, scene_transform, proj)
         } else {
             return;
         };
@@ -207,16 +179,17 @@ pub fn control_system(
     let mut radius_scalar = 1.0;
     let is_orthographic = matches!(projection, Projection::Orthographic(_));
 
+    let dt = time.delta_seconds();
     for event in events.iter() {
         match event {
             ControlEvent::Orbit(delta) => {
-                look_angles.add_yaw(-delta.x);
-                look_angles.add_pitch(delta.y);
+                look_angles.add_yaw(dt * -delta.x);
+                look_angles.add_pitch(dt * delta.y);
             }
             ControlEvent::TranslateTarget(delta) => {
                 let right_dir = scene_transform.rotation * -Vec3::X;
                 let up_dir = scene_transform.rotation * Vec3::Y;
-                let mut translation = delta.x * right_dir + delta.y * up_dir;
+                let mut translation = dt * delta.x * right_dir + dt * delta.y * up_dir;
                 if is_orthographic {
                     let scale = transform.scale * 0.5;
                     translation *= scale;

@@ -41,19 +41,19 @@ fn setup(
         ..Default::default()
     });
 
-    let orth = Camera3dBundle {
-        projection: OrthographicProjection {
-            scale: 5.0,
-            scaling_mode: ScalingMode::FixedVertical(2.0),
+    commands
+        .spawn(Camera3dBundle {
+            projection: OrthographicProjection {
+                scale: 5.0,
+                scaling_mode: ScalingMode::FixedVertical(2.0),
+                ..Default::default()
+            }
+            .into(),
             ..Default::default()
-        }
-        .into(),
-        ..Default::default()
-    };
-    commands.spawn(OrbitCameraBundle::new(
-        OrbitCameraController::default(),
-        orth,
-        Vec3::new(-2.0, 5.0, 5.0),
-        Vec3::new(0., 0., 0.),
-    ));
+        })
+        .insert(OrbitCameraBundle::new(
+            OrbitCameraController::default(),
+            Vec3::new(-2.0, 5.0, 5.0),
+            Vec3::new(0., 0., 0.),
+        ));
 }
