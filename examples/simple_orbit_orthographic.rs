@@ -50,10 +50,12 @@ fn setup(
         .into(),
         ..Default::default()
     };
-    commands.spawn(OrbitCameraBundle::new(
-        OrbitCameraController::default(),
-        orth,
-        Vec3::new(-2.0, 5.0, 5.0),
-        Vec3::new(0., 0., 0.),
-    ));
+    commands
+        .spawn(OrbitCameraBundle::new_with_scale(
+            OrbitCameraController::default(),
+            Vec3::new(-2.0, 5.0, 5.0),
+            Vec3::new(0., 0., 0.),
+            5.,
+        ))
+        .insert(orth);
 }

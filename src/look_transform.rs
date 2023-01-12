@@ -2,15 +2,19 @@ use bevy::{
     app::prelude::*,
     ecs::{bundle::Bundle, prelude::*},
     math::prelude::*,
-    render::camera::Projection,
+    prelude::{OrthographicProjection, Projection},
     transform::components::Transform,
 };
 
 pub struct LookTransformPlugin;
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
+pub struct LookTransformSystem;
+
 impl Plugin for LookTransformPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(look_transform_system);
+        app.add_system(look_transform_system.label(LookTransformSystem))
+            .add_system(apply_look_transform_scale_orthographic.after(LookTransformSystem));
     }
 }
 
@@ -26,7 +30,7 @@ pub struct LookTransformBundle {
 pub struct LookTransform {
     pub eye: Vec3,
     pub target: Vec3,
-    pub scale: f32,
+    pub scale: Option<f32>,
 }
 
 impl From<LookTransform> for Transform {
@@ -40,12 +44,16 @@ impl LookTransform {
         Self {
             eye,
             target,
-            scale: 0.0,
+            scale: None,
         }
     }
 
     pub fn new_with_scale(eye: Vec3, target: Vec3, scale: f32) -> Self {
-        Self { eye, target, scale }
+        Self {
+            eye,
+            target,
+            scale: Some(scale),
+        }
     }
 
     pub fn radius(&self) -> f32 {
@@ -82,6 +90,14 @@ impl Smoother {
         }
     }
 
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn current_lerp_tfm(&self) -> &Option<LookTransform> {
+        &self.lerp_tfm
+    }
+
     pub(crate) fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         if self.enabled {
@@ -102,10 +118,18 @@ impl Smoother {
         let old_lerp_tfm = self.lerp_tfm.unwrap_or(*new_tfm);
 
         let lead_weight = 1.0 - self.lag_weight;
+
+        let scale = match (old_lerp_tfm.scale, new_tfm.scale) {
+            (Some(old_scale), Some(new_scale)) => {
+                Some(old_scale * self.lag_weight + new_scale * lead_weight)
+            }
+            _ => None,
+        };
+
         let lerp_tfm = LookTransform {
             eye: old_lerp_tfm.eye * self.lag_weight + new_tfm.eye * lead_weight,
             target: old_lerp_tfm.target * self.lag_weight + new_tfm.target * lead_weight,
-            scale: old_lerp_tfm.scale * self.lag_weight + new_tfm.scale * lead_weight,
+            scale,
         };
 
         self.lerp_tfm = Some(lerp_tfm);
@@ -119,23 +143,47 @@ impl Smoother {
 }
 
 fn look_transform_system(
-    mut cameras: Query<(
-        &LookTransform,
-        &mut Transform,
-        &mut Projection,
-        Option<&mut Smoother>,
-    )>,
+    mut cameras: Query<(&LookTransform, &mut Transform, Option<&mut Smoother>)>,
 ) {
-    for (look_transform, mut scene_transform, mut projection, smoother) in cameras.iter_mut() {
+    for (look_transform, mut scene_transform, smoother) in cameras.iter_mut() {
         match smoother {
             Some(mut s) if s.enabled => {
                 let tr = s.smooth_transform(look_transform);
-                if let Projection::Orthographic(orth) = projection.as_mut() {
-                    orth.scale = tr.scale;
-                }
                 *scene_transform = tr.into()
             }
             _ => (),
         };
+    }
+}
+
+fn apply_look_transform_scale_orthographic(
+    mut cameras: Query<
+        (
+            &Smoother,
+            Option<&mut Projection>,
+            Option<&mut OrthographicProjection>,
+        ),
+        Or<(With<Projection>, With<OrthographicProjection>)>,
+    >,
+) {
+    for (smoother, proj, orth) in cameras.iter_mut() {
+        if smoother.is_enabled() {
+            smoother
+                .current_lerp_tfm()
+                .and_then(|latest| latest.scale)
+                .map(|scale| {
+                    match (proj, orth) {
+                        (Some(mut proj), _) => {
+                            if let Projection::Orthographic(orth) = proj.as_mut() {
+                                orth.scale = scale;
+                            }
+                        }
+                        (_, Some(mut orth)) => {
+                            orth.scale = scale;
+                        }
+                        _ => {}
+                    };
+                });
+        }
     }
 }

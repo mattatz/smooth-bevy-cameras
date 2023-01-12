@@ -8,8 +8,6 @@ use bevy::{
         prelude::*,
     },
     math::prelude::*,
-    prelude::Camera3dBundle,
-    render::camera::Projection,
     transform::components::Transform,
 };
 use serde::{Deserialize, Serialize};
@@ -45,25 +43,32 @@ pub struct OrbitCameraBundle {
     controller: OrbitCameraController,
     #[bundle]
     look_transform: LookTransformBundle,
-    #[bundle]
-    camera_bundle: Camera3dBundle,
+    transform: Transform,
 }
 
 impl OrbitCameraBundle {
-    pub fn new(
+    pub fn new(controller: OrbitCameraController, eye: Vec3, target: Vec3) -> Self {
+        // Make sure the transform is consistent with the controller to start.
+        let transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
+
+        Self {
+            controller,
+            look_transform: LookTransformBundle {
+                transform: LookTransform::new(eye, target),
+                smoother: Smoother::new(controller.smoothing_weight),
+            },
+            transform,
+        }
+    }
+
+    pub fn new_with_scale(
         controller: OrbitCameraController,
-        mut camera: Camera3dBundle,
         eye: Vec3,
         target: Vec3,
+        scale: f32,
     ) -> Self {
         // Make sure the transform is consistent with the controller to start.
-        camera.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
-
-        let scale = if let Projection::Orthographic(ref o) = camera.projection {
-            o.scale
-        } else {
-            0.0
-        };
+        let transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
 
         Self {
             controller,
@@ -71,37 +76,10 @@ impl OrbitCameraBundle {
                 transform: LookTransform::new_with_scale(eye, target, scale),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
-            camera_bundle: camera,
+            transform,
         }
     }
 }
-
-/*
-impl OrbitCameraBundle<OrthographicCameraBundle<Camera3d>> {
-    pub fn with_orthographic(
-        controller: OrbitCameraController,
-        mut orthographic: OrthographicCameraBundle<Camera3d>,
-        eye: Vec3,
-        target: Vec3,
-    ) -> Self {
-        // Make sure the transform is consistent with the controller to start.
-        orthographic.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
-
-        Self {
-            controller,
-            look_transform: LookTransformBundle {
-                transform: LookTransform::new_with_scale(
-                    eye,
-                    target,
-                    orthographic.orthographic_projection.scale,
-                ),
-                smoother: Smoother::new(controller.smoothing_weight),
-            },
-            camera_bundle: orthographic,
-        }
-    }
-}
-*/
 
 /// A 3rd person camera that orbits around the target.
 #[derive(Clone, Component, Copy, Debug, Deserialize, Serialize)]
@@ -186,26 +164,18 @@ pub fn default_input_map(
 
 pub fn control_system(
     mut events: EventReader<ControlEvent>,
-    mut cameras: Query<(
-        &OrbitCameraController,
-        &mut LookTransform,
-        &Transform,
-        &Projection,
-    )>,
+    mut cameras: Query<(&OrbitCameraController, &mut LookTransform, &Transform)>,
 ) {
     // Can only control one camera at a time.
-    let (mut transform, scene_transform, projection) =
-        if let Some((_, transform, scene_transform, projection)) =
-            cameras.iter_mut().find(|c| c.0.enabled)
-        {
-            (transform, scene_transform, projection)
+    let (mut transform, scene_transform) =
+        if let Some((_, transform, scene_transform)) = cameras.iter_mut().find(|c| c.0.enabled) {
+            (transform, scene_transform)
         } else {
             return;
         };
 
     let mut look_angles = LookAngles::from_vector(-transform.look_direction().unwrap());
     let mut radius_scalar = 1.0;
-    let is_orthographic = matches!(projection, Projection::Orthographic(_));
 
     for event in events.iter() {
         match event {
@@ -217,8 +187,8 @@ pub fn control_system(
                 let right_dir = scene_transform.rotation * -Vec3::X;
                 let up_dir = scene_transform.rotation * Vec3::Y;
                 let mut translation = delta.x * right_dir + delta.y * up_dir;
-                if is_orthographic {
-                    let scale = transform.scale * 0.5;
+                if let Some(scale) = transform.scale {
+                    let scale = scale * 0.5;
                     translation *= scale;
                 }
                 transform.target += translation;
@@ -231,13 +201,17 @@ pub fn control_system(
 
     look_angles.assert_not_looking_up();
 
-    if is_orthographic {
-        transform.scale *= radius_scalar;
-        transform.eye = transform.target + transform.radius() * look_angles.unit_vector();
-    } else {
-        let new_radius = (radius_scalar * transform.radius())
-            .min(1000000.0)
-            .max(0.001);
-        transform.eye = transform.target + new_radius * look_angles.unit_vector();
-    }
+    match transform.scale {
+        Some(scale) => {
+            // Update scale instead of moving forward
+            transform.scale = Some(scale * radius_scalar);
+            transform.eye = transform.target + transform.radius() * look_angles.unit_vector();
+        }
+        None => {
+            let new_radius = (radius_scalar * transform.radius())
+                .min(1000000.0)
+                .max(0.001);
+            transform.eye = transform.target + new_radius * look_angles.unit_vector();
+        }
+    };
 }

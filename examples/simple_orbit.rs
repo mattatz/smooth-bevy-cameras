@@ -41,10 +41,11 @@ fn setup(
         ..Default::default()
     });
 
-    commands.spawn(OrbitCameraBundle::new(
-        OrbitCameraController::default(),
-        Camera3dBundle::default(),
-        Vec3::new(-2.0, 5.0, 5.0),
-        Vec3::new(0., 0., 0.),
-    ));
+    commands
+        .spawn(OrbitCameraBundle::new(
+            OrbitCameraController::default(),
+            Vec3::new(-2.0, 5.0, 5.0),
+            Vec3::new(0., 0., 0.),
+        ))
+        .insert(Camera3dBundle::default());
 }
