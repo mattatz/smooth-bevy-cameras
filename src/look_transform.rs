@@ -30,12 +30,13 @@ pub struct LookTransformBundle {
 pub struct LookTransform {
     pub eye: Vec3,
     pub target: Vec3,
+    pub up: Option<Vec3>,
     pub scale: Option<f32>,
 }
 
 impl From<LookTransform> for Transform {
     fn from(t: LookTransform) -> Self {
-        eye_look_at_target_transform(t.eye, t.target)
+        eye_look_at_target_transform(t.eye, t.target, t.up.unwrap_or(Vec3::Y))
     }
 }
 
@@ -44,6 +45,7 @@ impl LookTransform {
         Self {
             eye,
             target,
+            up: None,
             scale: None,
         }
     }
@@ -52,6 +54,7 @@ impl LookTransform {
         Self {
             eye,
             target,
+            up: None,
             scale: Some(scale),
         }
     }
@@ -65,12 +68,12 @@ impl LookTransform {
     }
 }
 
-fn eye_look_at_target_transform(eye: Vec3, target: Vec3) -> Transform {
+fn eye_look_at_target_transform(eye: Vec3, target: Vec3, up: Vec3) -> Transform {
     // If eye and target are very close, we avoid imprecision issues by keeping the look vector a unit vector.
     let look_vector = (target - eye).normalize();
     let look_at = eye + look_vector;
 
-    Transform::from_translation(eye).looking_at(look_at, Vec3::Y)
+    Transform::from_translation(eye).looking_at(look_at, up)
 }
 
 /// Preforms exponential smoothing on a `LookTransform`. Set the `lag_weight` between `0.0` and `1.0`, where higher is smoother.
@@ -129,6 +132,7 @@ impl Smoother {
         let lerp_tfm = LookTransform {
             eye: old_lerp_tfm.eye * self.lag_weight + new_tfm.eye * lead_weight,
             target: old_lerp_tfm.target * self.lag_weight + new_tfm.target * lead_weight,
+            up: new_tfm.up,
             scale,
         };
 
