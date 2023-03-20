@@ -42,11 +42,11 @@ fn setup(
 
     commands
         .spawn(LookTransformBundle {
-            transform: LookTransform {
-                eye: Vec3::new(-2.0, 2.5, 5.0),
-                target: Vec3::new(0.0, 0.5, 0.0),
-                up: Vec3::Y,
-            },
+            transform: LookTransform::new(
+                Vec3::new(-2.0, 2.5, 5.0),
+                Vec3::new(0.0, 0.5, 0.0),
+                Vec3::Y,
+            ),
             smoother: Smoother::new(0.9),
         })
         .insert(Camera3dBundle {

@@ -60,6 +60,26 @@ impl OrbitCameraBundle {
             transform,
         }
     }
+
+    pub fn new_with_scale(
+        controller: OrbitCameraController,
+        eye: Vec3,
+        target: Vec3,
+        up: Vec3,
+        scale: f32,
+    ) -> Self {
+        // Make sure the transform is consistent with the controller to start.
+        let transform = Transform::from_translation(eye).looking_at(target, up);
+
+        Self {
+            controller,
+            look_transform: LookTransformBundle {
+                transform: LookTransform::new_with_scale(eye, target, up, scale),
+                smoother: Smoother::new(controller.smoothing_weight),
+            },
+            transform,
+        }
+    }
 }
 
 /// A 3rd person camera that orbits around the target.
@@ -170,7 +190,12 @@ pub fn control_system(
             ControlEvent::TranslateTarget(delta) => {
                 let right_dir = scene_transform.rotation * -Vec3::X;
                 let up_dir = scene_transform.rotation * Vec3::Y;
-                transform.target += dt * delta.x * right_dir + dt * delta.y * up_dir;
+                let mut translation = dt * (delta.x * right_dir + delta.y * up_dir);
+                if let Some(scale) = transform.scale {
+                    let scale = scale * 0.5;
+                    translation *= scale;
+                }
+                transform.target += translation;
             }
             ControlEvent::Zoom(scalar) => {
                 radius_scalar *= scalar;
@@ -180,8 +205,17 @@ pub fn control_system(
 
     look_angles.assert_not_looking_up();
 
-    let new_radius = (radius_scalar * transform.radius())
-        .min(1000000.0)
-        .max(0.001);
-    transform.eye = transform.target + new_radius * look_angles.unit_vector();
+    match transform.scale {
+        Some(scale) => {
+            // Update scale instead of moving forward
+            transform.scale = Some(scale * radius_scalar);
+            transform.eye = transform.target + transform.radius() * look_angles.unit_vector();
+        }
+        None => {
+            let new_radius = (radius_scalar * transform.radius())
+                .min(1000000.0)
+                .max(0.001);
+            transform.eye = transform.target + new_radius * look_angles.unit_vector();
+        }
+    };
 }

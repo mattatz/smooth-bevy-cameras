@@ -2,14 +2,19 @@ use bevy::{
     app::prelude::*,
     ecs::{bundle::Bundle, prelude::*},
     math::prelude::*,
+    prelude::{OrthographicProjection, Projection},
     transform::components::Transform,
 };
 
 pub struct LookTransformPlugin;
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+pub struct LookTransformSet;
+
 impl Plugin for LookTransformPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(look_transform_system);
+        app.add_system(look_transform_system.in_set(LookTransformSet))
+            .add_system(apply_look_transform_scale_orthographic.after(LookTransformSet));
     }
 }
 
@@ -26,6 +31,7 @@ pub struct LookTransform {
     pub eye: Vec3,
     pub target: Vec3,
     pub up: Vec3,
+    pub scale: Option<f32>,
 }
 
 impl From<LookTransform> for Transform {
@@ -36,7 +42,21 @@ impl From<LookTransform> for Transform {
 
 impl LookTransform {
     pub fn new(eye: Vec3, target: Vec3, up: Vec3) -> Self {
-        Self { eye, target, up }
+        Self {
+            eye,
+            target,
+            up,
+            scale: None,
+        }
+    }
+
+    pub fn new_with_scale(eye: Vec3, target: Vec3, up: Vec3, scale: f32) -> Self {
+        Self {
+            eye,
+            target,
+            up,
+            scale: Some(scale),
+        }
     }
 
     pub fn radius(&self) -> f32 {
@@ -93,10 +113,18 @@ impl Smoother {
         let old_lerp_tfm = self.lerp_tfm.unwrap_or(*new_tfm);
 
         let lead_weight = 1.0 - self.lag_weight;
+        let scale = match (old_lerp_tfm.scale, new_tfm.scale) {
+            (Some(old_scale), Some(new_scale)) => {
+                Some(old_scale * self.lag_weight + new_scale * lead_weight)
+            }
+            _ => None,
+        };
+
         let lerp_tfm = LookTransform {
             eye: old_lerp_tfm.eye * self.lag_weight + new_tfm.eye * lead_weight,
             target: old_lerp_tfm.target * self.lag_weight + new_tfm.target * lead_weight,
             up: new_tfm.up,
+            scale,
         };
 
         self.lerp_tfm = Some(lerp_tfm);
@@ -106,6 +134,14 @@ impl Smoother {
 
     pub fn reset(&mut self) {
         self.lerp_tfm = None;
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn current_lerp_tfm(&self) -> &Option<LookTransform> {
+        &self.lerp_tfm
     }
 }
 
@@ -119,5 +155,37 @@ fn look_transform_system(
             }
             _ => (),
         };
+    }
+}
+
+fn apply_look_transform_scale_orthographic(
+    mut cameras: Query<
+        (
+            &Smoother,
+            Option<&mut Projection>,
+            Option<&mut OrthographicProjection>,
+        ),
+        Or<(With<Projection>, With<OrthographicProjection>)>,
+    >,
+) {
+    for (smoother, proj, orth) in cameras.iter_mut() {
+        if smoother.is_enabled() {
+            smoother
+                .current_lerp_tfm()
+                .and_then(|latest| latest.scale)
+                .map(|scale| {
+                    match (proj, orth) {
+                        (Some(mut proj), _) => {
+                            if let Projection::Orthographic(orth) = proj.as_mut() {
+                                orth.scale = scale;
+                            }
+                        }
+                        (_, Some(mut orth)) => {
+                            orth.scale = scale;
+                        }
+                        _ => {}
+                    };
+                });
+        }
     }
 }
