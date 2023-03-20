@@ -3,27 +3,28 @@ use bevy::{
     prelude::*,
     render::{
         camera::{
-            camera_system, CameraProjection, CameraProjectionPlugin, CameraRenderGraph,
-            ScalingMode, WindowOrigin,
+            camera_system, CameraProjection, CameraProjectionPlugin, CameraRenderGraph, ScalingMode,
         },
         primitives::Frustum,
-        view::{update_frusta, VisibleEntities}, render_resource::Face,
+        render_resource::Face,
+        view::{update_frusta, VisibleEntities},
     },
+    transform::TransformSystem,
 };
 use smooth_bevy_cameras::{
     controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
-    LookTransformPlugin, LookTransformSystem, Smoother,
+    LookTransformPlugin, LookTransformSet, Smoother,
 };
 
 fn main() {
     App::new()
-        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(Msaa::Sample4)
         .add_plugins(DefaultPlugins)
         .add_plugin(CeilingProjectionPlugin)
         .add_plugin(LookTransformPlugin)
         .add_plugin(OrbitCameraPlugin::default())
         .add_startup_system(setup)
-        .add_system(apply_look_transform_scale_custom_projection.after(LookTransformSystem))
+        .add_system(apply_look_transform_scale_custom_projection.after(LookTransformSet))
         .run();
 }
 
@@ -37,7 +38,10 @@ fn setup(
     let mut material: StandardMaterial = Color::rgb(0.3, 0.5, 0.3).into();
     material.cull_mode = Some(Face::Front);
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane {
+            size: 5.0,
+            subdivisions: 5,
+        })),
         material: materials.add(material),
         ..Default::default()
     });
@@ -81,12 +85,13 @@ fn setup(
     commands
         .spawn(OrbitCameraBundle::new_with_scale(
             OrbitCameraController {
-                mouse_rotate_sensitivity: Vec2::new(-0.006, 0.006),
-                mouse_translate_sensitivity: Vec2::new(-0.008, 0.008),
+                mouse_rotate_sensitivity: Vec2::new(-0.1, 0.1),
+                mouse_translate_sensitivity: Vec2::new(-0.1, 0.1),
                 ..Default::default()
             },
             Vec3::new(-2.0, 5.0, 5.0),
             Vec3::new(0., 0., 0.),
+            Vec3::Y,
             5.,
         ))
         .insert(custom_camera_bundle);
@@ -109,17 +114,18 @@ fn apply_look_transform_scale_custom_projection(
 
 struct CeilingProjectionPlugin;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
-struct UpdateProjectionFrusta;
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
+struct CameraUpdateSystem;
 
 impl Plugin for CeilingProjectionPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(CameraProjectionPlugin::<CeilingProjection>::default())
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
+            .configure_set(CameraUpdateSystem.in_base_set(CoreSet::PostUpdate))
+            .add_system(
                 update_frusta::<CeilingProjection>
-                    .label(UpdateProjectionFrusta)
-                    .after(camera_system::<CeilingProjection>),
+                    .in_set(CameraUpdateSystem)
+                    .after(camera_system::<CeilingProjection>)
+                    .after(TransformSystem::TransformPropagate),
             );
     }
 }
@@ -127,25 +133,22 @@ impl Plugin for CeilingProjectionPlugin {
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component, Default)]
 struct CeilingProjection {
-    pub left: f32,
-    pub right: f32,
-    pub bottom: f32,
-    pub top: f32,
     pub near: f32,
     pub far: f32,
-    pub window_origin: WindowOrigin,
+    pub viewport_origin: Vec2,
     pub scaling_mode: ScalingMode,
     pub scale: f32,
+    pub area: Rect,
 }
 
 impl CameraProjection for CeilingProjection {
     fn get_projection_matrix(&self) -> Mat4 {
         Mat4::orthographic_rh(
             // invert x axis
-            -self.left * self.scale,
-            -self.right * self.scale,
-            self.bottom * self.scale,
-            self.top * self.scale,
+            self.area.max.x,
+            self.area.min.x,
+            self.area.min.y,
+            self.area.max.y,
             // NOTE: near and far are swapped to invert the depth range from [0,1] to [1,0]
             // This is for interoperability with pipelines using infinite reverse perspective projections.
             self.far,
@@ -154,16 +157,30 @@ impl CameraProjection for CeilingProjection {
     }
 
     fn update(&mut self, width: f32, height: f32) {
-        let (viewport_width, viewport_height) = match self.scaling_mode {
-            ScalingMode::WindowSize => (width, height),
-            ScalingMode::Auto {
+        let (projection_width, projection_height) = match self.scaling_mode {
+            ScalingMode::WindowSize(pixel_scale) => (width / pixel_scale, height / pixel_scale),
+            ScalingMode::AutoMin {
                 min_width,
                 min_height,
             } => {
+                // Compare Pixels of current width and minimal height and Pixels of minimal width with current height.
+                // Then use bigger (min_height when true) as what it refers to (height when true) and calculate rest so it can't get under minimum.
                 if width * min_height > min_width * height {
                     (width * min_height / height, min_height)
                 } else {
                     (min_width, height * min_width / width)
+                }
+            }
+            ScalingMode::AutoMax {
+                max_width,
+                max_height,
+            } => {
+                // Compare Pixels of current width and maximal height and Pixels of maximal width with current height.
+                // Then use smaller (max_height when true) as what it refers to (height when true) and calculate rest so it can't get over maximum.
+                if width * max_height < max_width * height {
+                    (width * max_height / height, max_height)
+                } else {
+                    (max_width, height * max_width / width)
                 }
             }
             ScalingMode::FixedVertical(viewport_height) => {
@@ -172,34 +189,17 @@ impl CameraProjection for CeilingProjection {
             ScalingMode::FixedHorizontal(viewport_width) => {
                 (viewport_width, height * viewport_width / width)
             }
-            ScalingMode::None => return,
+            ScalingMode::Fixed { width, height } => (width, height),
         };
 
-        match self.window_origin {
-            WindowOrigin::Center => {
-                let half_width = viewport_width / 2.0;
-                let half_height = viewport_height / 2.0;
-                self.left = -half_width;
-                self.bottom = -half_height;
-                self.right = half_width;
-                self.top = half_height;
-
-                if let ScalingMode::WindowSize = self.scaling_mode {
-                    if self.scale == 1.0 {
-                        self.left = self.left.floor();
-                        self.bottom = self.bottom.floor();
-                        self.right = self.right.floor();
-                        self.top = self.top.floor();
-                    }
-                }
-            }
-            WindowOrigin::BottomLeft => {
-                self.left = 0.0;
-                self.bottom = 0.0;
-                self.right = viewport_width;
-                self.top = viewport_height;
-            }
-        }
+        let origin_x = projection_width * self.viewport_origin.x;
+        let origin_y = projection_height * self.viewport_origin.y;
+        self.area = Rect::new(
+            self.scale * -origin_x,
+            self.scale * -origin_y,
+            self.scale * (projection_width - origin_x),
+            self.scale * (projection_height - origin_y),
+        );
     }
 
     fn far(&self) -> f32 {
@@ -210,15 +210,12 @@ impl CameraProjection for CeilingProjection {
 impl Default for CeilingProjection {
     fn default() -> Self {
         CeilingProjection {
-            left: -1.0,
-            right: 1.0,
-            bottom: -1.0,
-            top: 1.0,
             near: 0.0,
             far: 1000.0,
-            window_origin: WindowOrigin::Center,
-            scaling_mode: ScalingMode::WindowSize,
+            viewport_origin: Vec2::new(0.5, 0.5),
+            scaling_mode: ScalingMode::WindowSize(1.),
             scale: 1.0,
+            area: Rect::new(-1.0, -1.0, 1.0, 1.0),
         }
     }
 }

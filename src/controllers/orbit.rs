@@ -190,12 +190,12 @@ pub fn control_system(
             ControlEvent::TranslateTarget(delta) => {
                 let right_dir = scene_transform.rotation * -Vec3::X;
                 let up_dir = scene_transform.rotation * Vec3::Y;
-                let mut translation = dt * (delta.x * right_dir + delta.y * up_dir);
+                let mut translation = delta.x * right_dir + delta.y * up_dir;
                 if let Some(scale) = transform.scale {
                     let scale = scale * 0.5;
                     translation *= scale;
                 }
-                transform.target += translation;
+                transform.target += translation * dt;
             }
             ControlEvent::Zoom(scalar) => {
                 radius_scalar *= scalar;
