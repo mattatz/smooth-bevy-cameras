@@ -3,7 +3,7 @@ use smooth_bevy_cameras::{LookTransform, LookTransformBundle, LookTransformPlugi
 
 fn main() {
     App::new()
-        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(Msaa::Sample4)
         .add_plugins(DefaultPlugins)
         .add_plugin(LookTransformPlugin)
         .add_startup_system(setup)
@@ -18,7 +18,10 @@ fn setup(
 ) {
     // plane
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane {
+            size: 5.0,
+            subdivisions: 4,
+        })),
         material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
         ..Default::default()
     });
@@ -42,8 +45,7 @@ fn setup(
             transform: LookTransform {
                 eye: Vec3::new(-2.0, 2.5, 5.0),
                 target: Vec3::new(0.0, 0.5, 0.0),
-                up: None,
-                scale: None,
+                up: Vec3::Y,
             },
             smoother: Smoother::new(0.9),
         })

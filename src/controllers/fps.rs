@@ -5,10 +5,9 @@ use bevy::{
     ecs::{bundle::Bundle, prelude::*},
     input::{mouse::MouseMotion, prelude::*},
     math::prelude::*,
-    prelude::Camera3dBundle,
+    time::Time,
     transform::components::Transform,
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Default)]
 pub struct FpsCameraPlugin {
@@ -26,7 +25,7 @@ impl FpsCameraPlugin {
 impl Plugin for FpsCameraPlugin {
     fn build(&self, app: &mut App) {
         let app = app
-            .add_system_to_stage(CoreStage::PreUpdate, on_controller_enabled_changed)
+            .add_system(on_controller_enabled_changed.in_base_set(CoreSet::PreUpdate))
             .add_system(control_system)
             .add_event::<ControlEvent>();
 
@@ -41,33 +40,28 @@ pub struct FpsCameraBundle {
     controller: FpsCameraController,
     #[bundle]
     look_transform: LookTransformBundle,
-    #[bundle]
-    camera: Camera3dBundle,
+    transform: Transform,
 }
 
 impl FpsCameraBundle {
-    pub fn new(
-        controller: FpsCameraController,
-        mut camera: Camera3dBundle,
-        eye: Vec3,
-        target: Vec3,
-    ) -> Self {
+    pub fn new(controller: FpsCameraController, eye: Vec3, target: Vec3, up: Vec3) -> Self {
         // Make sure the transform is consistent with the controller to start.
-        camera.transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
+        let transform = Transform::from_translation(eye).looking_at(target, up);
 
         Self {
             controller,
             look_transform: LookTransformBundle {
-                transform: LookTransform::new(eye, target),
+                transform: LookTransform::new(eye, target, up),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
-            camera,
+            transform,
         }
     }
 }
 
 /// Your typical first-person camera controller.
-#[derive(Clone, Component, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Component, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FpsCameraController {
     pub enabled: bool,
     pub mouse_rotate_sensitivity: Vec2,
@@ -79,8 +73,8 @@ impl Default for FpsCameraController {
     fn default() -> Self {
         Self {
             enabled: true,
-            mouse_rotate_sensitivity: Vec2::splat(0.002),
-            translate_sensitivity: 0.5,
+            mouse_rotate_sensitivity: Vec2::splat(0.2),
+            translate_sensitivity: 2.0,
             smoothing_weight: 0.9,
         }
     }
@@ -140,6 +134,7 @@ pub fn default_input_map(
 pub fn control_system(
     mut events: EventReader<ControlEvent>,
     mut cameras: Query<(&FpsCameraController, &mut LookTransform)>,
+    time: Res<Time>,
 ) {
     // Can only control one camera at a time.
     let mut transform = if let Some((_, transform)) = cameras.iter_mut().find(|c| c.0.enabled) {
@@ -156,16 +151,17 @@ pub fn control_system(
     let rot_y = yaw_rot * Vec3::Y;
     let rot_z = yaw_rot * Vec3::Z;
 
+    let dt = time.delta_seconds();
     for event in events.iter() {
         match event {
             ControlEvent::Rotate(delta) => {
                 // Rotates with pitch and yaw.
-                look_angles.add_yaw(-delta.x);
-                look_angles.add_pitch(-delta.y);
+                look_angles.add_yaw(dt * -delta.x);
+                look_angles.add_pitch(dt * -delta.y);
             }
             ControlEvent::TranslateEye(delta) => {
                 // Translates up/down (Y) left/right (X) and forward/back (Z).
-                transform.eye += delta.x * rot_x + delta.y * rot_y + delta.z * rot_z;
+                transform.eye += dt * delta.x * rot_x + dt * delta.y * rot_y + dt * delta.z * rot_z;
             }
         }
     }
