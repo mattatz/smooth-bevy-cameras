@@ -8,10 +8,11 @@ use bevy::{
         prelude::*,
     },
     math::prelude::*,
+    prelude::ReflectDefault,
+    reflect::Reflect,
     time::Time,
-    transform::components::Transform, prelude::Projection,
+    transform::components::Transform,
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Default)]
 pub struct OrbitCameraPlugin {
@@ -29,13 +30,12 @@ impl OrbitCameraPlugin {
 impl Plugin for OrbitCameraPlugin {
     fn build(&self, app: &mut App) {
         let app = app
-            .add_startup_system_to_stage(StartupStage::PostStartup, setup_orthographic_transform)
-            .add_system_to_stage(CoreStage::PreUpdate, on_controller_enabled_changed)
-            .add_system(control_system)
+            .add_systems(PreUpdate, on_controller_enabled_changed)
+            .add_systems(Update, control_system)
             .add_event::<ControlEvent>();
 
         if !self.override_input_system {
-            app.add_system(default_input_map);
+            app.add_systems(Update, default_input_map);
         }
     }
 }
@@ -43,20 +43,19 @@ impl Plugin for OrbitCameraPlugin {
 #[derive(Bundle)]
 pub struct OrbitCameraBundle {
     controller: OrbitCameraController,
-    #[bundle]
     look_transform: LookTransformBundle,
     transform: Transform,
 }
 
 impl OrbitCameraBundle {
-    pub fn new(controller: OrbitCameraController, eye: Vec3, target: Vec3) -> Self {
+    pub fn new(controller: OrbitCameraController, eye: Vec3, target: Vec3, up: Vec3) -> Self {
         // Make sure the transform is consistent with the controller to start.
-        let transform = Transform::from_translation(eye).looking_at(target, Vec3::Y);
+        let transform = Transform::from_translation(eye).looking_at(target, up);
 
         Self {
             controller,
             look_transform: LookTransformBundle {
-                transform: LookTransform::new(eye, target),
+                transform: LookTransform::new(eye, target, up),
                 smoother: Smoother::new(controller.smoothing_weight),
             },
             transform,
@@ -65,7 +64,9 @@ impl OrbitCameraBundle {
 }
 
 /// A 3rd person camera that orbits around the target.
-#[derive(Clone, Component, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Component, Copy, Debug, Reflect)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[reflect(Component, Default, Debug)]
 pub struct OrbitCameraController {
     pub enabled: bool,
     pub mouse_rotate_sensitivity: Vec2,
@@ -88,6 +89,7 @@ impl Default for OrbitCameraController {
     }
 }
 
+#[derive(Event)]
 pub enum ControlEvent {
     Orbit(Vec2),
     TranslateTarget(Vec2),
@@ -95,23 +97,6 @@ pub enum ControlEvent {
 }
 
 define_on_controller_enabled_changed!(OrbitCameraController);
-
-fn setup_orthographic_transform(
-    mut cameras: Query<(&OrbitCameraController, &mut LookTransform, &Projection)>,
-) {
-    let (mut transform, projection) =
-        if let Some((_, transform, projection)) = cameras.iter_mut().find(|c| c.0.enabled) {
-            (transform, projection)
-        } else {
-            return;
-        };
-    let scale = if let Projection::Orthographic(ref o) = projection {
-        o.scale
-    } else {
-        0.0
-    };
-    transform.scale = scale;
-}
 
 pub fn default_input_map(
     mut events: EventWriter<ControlEvent>,
@@ -136,11 +121,11 @@ pub fn default_input_map(
     } = *controller;
 
     let mut cursor_delta = Vec2::ZERO;
-    for event in mouse_motion_events.iter() {
+    for event in mouse_motion_events.read() {
         cursor_delta += event.delta;
     }
 
-    if keyboard.pressed(KeyCode::LControl) {
+    if keyboard.pressed(KeyCode::ControlLeft) {
         events.send(ControlEvent::Orbit(mouse_rotate_sensitivity * cursor_delta));
     }
 
@@ -151,7 +136,7 @@ pub fn default_input_map(
     }
 
     let mut scalar = 1.0;
-    for event in mouse_wheel_reader.iter() {
+    for event in mouse_wheel_reader.read() {
         // scale the event magnitude per pixel or per line
         let scroll_amount = match event.unit {
             MouseScrollUnit::Line => event.y,
@@ -165,22 +150,22 @@ pub fn default_input_map(
 pub fn control_system(
     time: Res<Time>,
     mut events: EventReader<ControlEvent>,
-    mut cameras: Query<(&OrbitCameraController, &mut LookTransform, &Transform, &Projection)>,
+    mut cameras: Query<(&OrbitCameraController, &mut LookTransform, &Transform)>,
 ) {
     // Can only control one camera at a time.
-    let (mut transform, scene_transform, projection) =
-        if let Some((_, transform, scene_transform, proj)) = cameras.iter_mut().find(|c| c.0.enabled) {
-            (transform, scene_transform, proj)
+    let (mut transform, scene_transform) =
+        if let Some((_, transform, scene_transform)) = cameras.iter_mut().find(|c| c.0.enabled) {
+            (transform, scene_transform)
         } else {
             return;
         };
 
     let mut look_angles = LookAngles::from_vector(-transform.look_direction().unwrap());
     let mut radius_scalar = 1.0;
-    let is_orthographic = matches!(projection, Projection::Orthographic(_));
+    let radius = transform.radius();
 
     let dt = time.delta_seconds();
-    for event in events.iter() {
+    for event in events.read() {
         match event {
             ControlEvent::Orbit(delta) => {
                 look_angles.add_yaw(dt * -delta.x);
@@ -189,12 +174,7 @@ pub fn control_system(
             ControlEvent::TranslateTarget(delta) => {
                 let right_dir = scene_transform.rotation * -Vec3::X;
                 let up_dir = scene_transform.rotation * Vec3::Y;
-                let mut translation = dt * delta.x * right_dir + dt * delta.y * up_dir;
-                if is_orthographic {
-                    let scale = transform.scale * 0.5;
-                    translation *= scale;
-                }
-                transform.target += translation;
+                transform.target += dt * delta.x * right_dir + dt * delta.y * up_dir;
             }
             ControlEvent::Zoom(scalar) => {
                 radius_scalar *= scalar;
@@ -204,13 +184,6 @@ pub fn control_system(
 
     look_angles.assert_not_looking_up();
 
-    if is_orthographic {
-        transform.scale *= radius_scalar;
-        transform.eye = transform.target + transform.radius() * look_angles.unit_vector();
-    } else {
-        let new_radius = (radius_scalar * transform.radius())
-            .min(1000000.0)
-            .max(0.001);
-        transform.eye = transform.target + new_radius * look_angles.unit_vector();
-    }
+    let new_radius = (radius_scalar * radius).min(1000000.0).max(0.001);
+    transform.eye = transform.target + new_radius * look_angles.unit_vector();
 }

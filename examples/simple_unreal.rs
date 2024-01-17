@@ -6,11 +6,11 @@ use smooth_bevy_cameras::{
 
 fn main() {
     App::new()
-        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(Msaa::Sample4)
         .add_plugins(DefaultPlugins)
-        .add_plugin(LookTransformPlugin)
-        .add_plugin(UnrealCameraPlugin::default())
-        .add_startup_system(setup)
+        .add_plugins(LookTransformPlugin)
+        .add_plugins(UnrealCameraPlugin::default())
+        .add_systems(Startup, setup)
         .run();
 }
 
@@ -22,7 +22,10 @@ fn setup(
 ) {
     // plane
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane {
+            size: 5.0,
+            subdivisions: 4,
+        })),
         material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
         ..Default::default()
     });
@@ -41,10 +44,12 @@ fn setup(
         ..Default::default()
     });
 
-    commands.spawn(UnrealCameraBundle::new(
-        UnrealCameraController::default(),
-        Camera3dBundle::default(),
-        Vec3::new(-2.0, 5.0, 5.0),
-        Vec3::new(0., 0., 0.),
-    ));
+    commands
+        .spawn(Camera3dBundle::default())
+        .insert(UnrealCameraBundle::new(
+            UnrealCameraController::default(),
+            Vec3::new(-2.0, 5.0, 5.0),
+            Vec3::new(0., 0., 0.),
+            Vec3::Y,
+        ));
 }
